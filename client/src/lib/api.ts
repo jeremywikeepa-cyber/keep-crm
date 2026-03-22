@@ -54,6 +54,8 @@ export const api = {
   scoreLead: (id: number) =>
     apiRequest(`/api/leads/${id}/score`, { method: "POST" }),
   getLeadStats: () => apiRequest("/api/leads/stats"),
+  getInboundLeads: () => apiRequest("/api/leads/inbound"),
+  getActionLeads: () => apiRequest("/api/leads/actions"),
 
   // Activities
   getActivities: (leadId: number) =>

@@ -162,6 +162,26 @@ router.post("/leads/enquiry", async (req: Request, res: Response) => {
 
 // ─── LEAD ROUTES ──────────────────────────────────────────────────────────────
 
+router.get("/leads/inbound", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await storage.getInboundLeads();
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching inbound leads:", error);
+    res.status(500).json({ error: "Failed to fetch inbound leads" });
+  }
+});
+
+router.get("/leads/actions", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await storage.getActionLeads();
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching action leads:", error);
+    res.status(500).json({ error: "Failed to fetch action leads" });
+  }
+});
+
 router.get("/leads", requireAuth, async (req: Request, res: Response) => {
   try {
     const includeArchived = req.query.archived === "true";

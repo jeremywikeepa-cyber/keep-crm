@@ -1,4 +1,4 @@
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, asc, and, sql, inArray, isNotNull, gt } from "drizzle-orm";
 import { db } from "./db.js";
 import {
   users,
@@ -110,6 +110,36 @@ export async function updateLead(
 
 export async function archiveLead(id: number): Promise<Lead | undefined> {
   return updateLead(id, { archived: true });
+}
+
+export async function getInboundLeads(): Promise<Lead[]> {
+  return db
+    .select()
+    .from(leads)
+    .where(
+      and(
+        inArray(leads.source, ["website_form", "manychat", "Website", "website"]),
+        gt(leads.createdAt, sql`NOW() - INTERVAL '48 hours'`),
+        eq(leads.archived, false)
+      )
+    )
+    .orderBy(desc(leads.createdAt))
+    .limit(10);
+}
+
+export async function getActionLeads(): Promise<Lead[]> {
+  return db
+    .select()
+    .from(leads)
+    .where(
+      and(
+        inArray(leads.aiClassification, ["hot", "warm"]),
+        eq(leads.archived, false),
+        isNotNull(leads.aiNextAction)
+      )
+    )
+    .orderBy(desc(leads.aiScore), asc(leads.updatedAt))
+    .limit(8);
 }
 
 export async function getLeadStats(): Promise<{
