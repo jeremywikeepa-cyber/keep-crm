@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/jerem/AppData/Roaming/**)",
+      "Bash(find /c -name npm.cmd)",
+      "Read(//c/Users/jerem/**)",
+      "Read(//c//**)",
+      "Bash(cmd.exe /c \"node --version\")",
+      "Bash(cmd.exe /c \"npm --version\")",
+      "Bash(npm install:*)",
+      "Bash(cmd.exe /c \"node --version && npm --version\" 2>&1)",
+      "Bash(cmd.exe /c \"where node\")",
+      "Bash(cmd.exe /c \"where npm\")",
+      "Bash(cmd.exe /c \"where node 2>&1\")",
+      "Bash(powershell.exe -Command \"Get-Command node -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source; Get-Command npm -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(export PATH=\"$PATH:/c/Program Files/nodejs\")",
+      "Bash(npm --version)",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" npm run db:push 2>&1)",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" echo \"\")",
+      "Bash(npm run:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" node_modules/.bin/tsx --env-file=.env node_modules/.bin/drizzle-kit push --force 2>&1)",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" npx --yes drizzle-kit push --config=drizzle.config.ts --force 2>&1)",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" npx vite build --config client/vite.config.ts)",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" npx tsc --noEmit)",
+      "Bash(tasklist)",
+      "Bash(curl -s http://localhost:5000/api/leads -H \"Cookie: \")",
+      "Bash(curl -s http://localhost:5000/)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(curl -s \"http://localhost:3000/src/pages/NewLeadPage.tsx\")",
+      "Bash(curl -s \"http://localhost:3000/src/pages/LeadDetailPage.tsx\")",
+      "Bash(netstat -ano)",
+      "Bash(curl -s \"http://localhost:3000/@fs/C:/Users/jerem/keep-crm/client/src/pages/NewLeadPage.tsx\")",
+      "Bash(curl -s \"http://localhost:3000/@fs/C:/Users/jerem/keep-crm/client/src/lib/utils.ts\")",
+      "Bash(curl -s \"http://localhost:3000/@fs/C:/Users/jerem/keep-crm/client/src/components/LeadCard.tsx\")",
+      "Bash(curl:*)",
+      "Bash(node -e \"const d=require\\(''''fs''''\\).readFileSync\\(''''/dev/stdin'''',''''utf8''''\\); const leads=JSON.parse\\(d\\); console.log\\(leads.length,''''leads''''\\); console.log\\(''''fields:'''',Object.keys\\(leads[0]\\)\\)\")",
+      "Bash(PATH=\"$PATH:/c/Program Files/nodejs\" npx vite build)"
+    ]
+  }
+}

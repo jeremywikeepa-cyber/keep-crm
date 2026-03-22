@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Begin Your Build — KEEP Modular</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --linen:    #F0EDE6;
+    --linen-d:  #E4DDD2;
+    --bark:     #5C5240;
+    --bark-l:   #7A6E5A;
+    --gold:     #9D926E;
+    --gold-l:   #B8AD8E;
+    --gold-ll:  #D9D1BC;
+    --white:    #FAFAF8;
+    --ink:      #2C2820;
+    --err:      #8B3A3A;
+    --radius:   12px;
+    --trans:    all 0.38s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--linen);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--bark);
+    overflow: hidden;
+  }
+
+  /* ── Layout shell ────────────────────────────────── */
+  .shell {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Left panel — brand / decorative ────────────── */
+  .panel-left {
+    background: var(--bark);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 48px 52px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel-left::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 80%, rgba(157,146,110,0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 80% at 80% 20%, rgba(240,237,230,0.06) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .brand-mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .brand-k {
+    width: 32px;
+    height: 32px;
+    border: 1.5px solid var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: var(--gold);
+    letter-spacing: -1px;
+    flex-shrink: 0;
+  }
+
+  .brand-name {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold-ll);
+  }
+
+  /* Wireframe modular box — brand motif */
+  .wireframe {
+    position: absolute;
+    right: -60px;
+    bottom: 80px;
+    width: 340px;
+    height: 240px;
+    opacity: 0.12;
+    pointer-events: none;
+  }
+
+  .panel-left-body {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 40px 0;
+  }
+
+  .left-step-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+    transition: var(--trans);
+  }
+
+  .left-heading {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(32px, 3.6vw, 52px);
+    line-height: 1.1;
+    color: var(--white);
+    margin-bottom: 20px;
+    transition: var(--trans);
+  }
+
+  .left-sub {
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--gold-ll);
+    font-weight: 300;
+    max-width: 320px;
+    transition: var(--trans);
+  }
+
+  /* Step dots */
+  .step-dots {
+    display: flex;
+    gap: 8px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--bark-l);
+    transition: var(--trans);
+    cursor: pointer;
+  }
+
+  .dot.active {
+    background: var(--gold);
+    width: 20px;
+    border-radius: 3px;
+  }
+
+  .dot.done {
+    background: var(--gold-l);
+  }
+
+  /* ── Right panel — form ──────────────────────────── */
+  .panel-right {
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 3px;
+    background: var(--linen-d);
+    flex-shrink: 0;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--gold);
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* Slides container */
+  .slides {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    padding: 52px 60px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 0.42s cubic-bezier(0.4,0,0.2,1),
+                transform 0.42s cubic-bezier(0.4,0,0.2,1);
+    pointer-events: none;
+    overflow-y: auto;
+  }
+
+  .slide.active {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: all;
+  }
+
+  .slide.exit-left {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+
+  .slide-step {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+  }
+
+  .slide-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(22px, 2.4vw, 32px);
+    color: var(--ink);
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
+  .slide-subtitle {
+    font-size: 14px;
+    color: var(--bark-l);
+    font-weight: 300;
+    margin-bottom: 36px;
+    line-height: 1.5;
+  }
+
+  /* Form elements */
+  .field-group {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .field-group.cols-2 { grid-template-columns: 1fr 1fr; }
+
+  .field-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bark-l);
+  }
+
+  input[type=text],
+  input[type=email],
+  input[type=tel],
+  textarea,
+  select {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--linen);
+    border: 1.5px solid var(--linen-d);
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--gold);
+    background: var(--white);
+  }
+
+  input.error, select.error, textarea.error {
+    border-color: var(--err);
+  }
+
+  .error-msg {
+    font-size: 12px;
+    color: var(--err);
+    margin-top: 2px;
+    display: none;
+  }
+
+  .field-wrap.has-error .error-msg { display: block; }
+  .field-wrap.has-error input,
+  .field-wrap.has-error select,
+  .field-wrap.has-error textarea { border-color: var(--err); }
+
+  textarea { resize: none; min-height: 100px; line-height: 1.6; }
+
+  /* Select custom arrow */
+  .select-wrap { position: relative; }
+  .select-wrap::after {
+    content: '';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--gold);
+    pointer-events: none;
+  }
+
+  /* Option cards — for building type selection */
+  .option-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .option-card {
+    border: 1.5px solid var(--linen-d);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    cursor: pointer;
+    transition: var(--trans);
+    background: var(--linen);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .option-card:hover {
+    border-color: var(--gold-l);
+    background: var(--white);
+  }
+
+  .option-card.selected {
+    border-color: var(--gold);
+    background: var(--white);
+  }
+
+  .option-card.selected::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--gold);
+  }
+
+  .option-icon {
+    font-size: 22px;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .option-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  .option-sub {
+    font-size: 12px;
+    color: var(--bark-l);
+    font-weight: 300;
+    line-height: 1.3;
+  }
+
+  .option-check {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--gold-ll);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--trans);
+  }
+
+  .option-card.selected .option-check {
+    background: var(--gold);
+    border-color: var(--gold);
+  }
+
+  .option-card.selected .option-check::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border-right: 2px solid white;
+    border-bottom: 2px solid white;
+    transform: rotate(45deg) translate(-1px, -1px);
+    display: block;
+  }
+
+  /* Checkbox rows */
+  .check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1.5px solid var(--linen-d);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: var(--trans);
+    background: var(--linen);
+  }
+
+  .check-row:hover { border-color: var(--gold-l); background: var(--white); }
+  .check-row.checked { border-color: var(--gold); background: var(--white); }
+
+  .check-box {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1.5px solid var(--gold-ll);
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--trans);
+  }
+
+  .check-row.checked .check-box {
+    background: var(--gold);
+    border-color: var(--gold);
+  }
+
+  .check-row.checked .check-box::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border-right: 2px solid white;
+    border-bottom: 2px solid white;
+    transform: rotate(45deg) translate(-1px, -1px);
+    display: block;
+  }
+
+  .check-label { font-size: 14px; color: var(--ink); line-height: 1.4; }
+  .check-label span { font-size: 12px; color: var(--bark-l); display: block; margin-top: 2px; }
+
+  /* Budget slider */
+  .budget-display {
+    font-family: 'DM Serif Display', serif;
+    font-size: 36px;
+    color: var(--bark);
+    margin-bottom: 8px;
+    line-height: 1;
+  }
+
+  .budget-range-label {
+    font-size: 12px;
+    color: var(--bark-l);
+    margin-bottom: 24px;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--linen-d);
+    border-radius: 2px;
+    outline: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    margin: 16px 0 8px;
+    background-image: linear-gradient(var(--gold), var(--gold));
+    background-repeat: no-repeat;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 3px solid var(--white);
+    box-shadow: 0 2px 8px rgba(92,82,64,0.25);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--gold-l);
+  }
+
+  /* Source chips */
+  .chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .chip {
+    padding: 10px 18px;
+    border: 1.5px solid var(--linen-d);
+    border-radius: 100px;
+    font-size: 13px;
+    color: var(--bark);
+    cursor: pointer;
+    transition: var(--trans);
+    background: var(--linen);
+    user-select: none;
+  }
+
+  .chip:hover { border-color: var(--gold-l); background: var(--white); }
+  .chip.selected { border-color: var(--gold); background: var(--white); color: var(--bark); font-weight: 500; }
+
+  /* ── Nav footer ──────────────────────────────────── */
+  .nav-footer {
+    padding: 20px 60px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border-top: 1px solid var(--linen-d);
+  }
+
+  .btn-back {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--bark-l);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 10px 0;
+    transition: color 0.2s;
+  }
+
+  .btn-back:hover { color: var(--bark); }
+  .btn-back:disabled { opacity: 0; pointer-events: none; }
+
+  .btn-back svg { width: 16px; height: 16px; }
+
+  .btn-next {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 28px;
+    background: var(--bark);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: var(--trans);
+  }
+
+  .btn-next:hover { background: var(--ink); }
+  .btn-next:active { transform: scale(0.98); }
+
+  .btn-next.submit-btn {
+    background: var(--gold);
+    color: var(--white);
+    padding: 14px 36px;
+  }
+
+  .btn-next.submit-btn:hover { background: var(--bark); }
+
+  .btn-next svg { width: 16px; height: 16px; }
+
+  /* ── Success state ───────────────────────────────── */
+  .success-screen {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: var(--white);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px;
+    opacity: 0;
+    transition: opacity 0.5s;
+    z-index: 10;
+  }
+
+  .success-screen.visible {
+    display: flex;
+    opacity: 1;
+  }
+
+  .success-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--linen);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 28px;
+  }
+
+  .success-icon svg { width: 28px; height: 28px; color: var(--gold); }
+
+  .success-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 30px;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+
+  .success-sub {
+    font-size: 15px;
+    color: var(--bark-l);
+    font-weight: 300;
+    line-height: 1.65;
+    max-width: 360px;
+  }
+
+  /* ── Responsive ──────────────────────────────────── */
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    .panel-left { display: none; }
+    .slide { padding: 40px 32px 24px; }
+    .nav-footer { padding: 16px 32px 24px; }
+  }
+
+  @media (max-width: 500px) {
+    .option-grid { grid-template-columns: 1fr; }
+    .field-group.cols-2 { grid-template-columns: 1fr; }
+    .slide { padding: 32px 24px 20px; }
+    .nav-footer { padding: 14px 24px 20px; }
+  }
+
+  /* Subtle entrance animation */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .slide.active .slide-step  { animation: fadeUp 0.4s 0.05s both; }
+  .slide.active .slide-title { animation: fadeUp 0.4s 0.12s both; }
+  .slide.active .slide-subtitle { animation: fadeUp 0.4s 0.18s both; }
+  .slide.active .field-group,
+  .slide.active .option-grid,
+  .slide.active .chip-grid,
+  .slide.active .check-rows,
+  .slide.active .budget-area { animation: fadeUp 0.4s 0.24s both; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── LEFT PANEL ─────────────────────────────── -->
+  <div class="panel-left">
+    <div class="brand-mark">
+      <div class="brand-k">K</div>
+      <span class="brand-name">Keep Modular</span>
+    </div>
+
+    <!-- Wireframe modular box SVG -->
+    <svg class="wireframe" viewBox="0 0 340 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="40" y="60" width="200" height="140" stroke="white" stroke-width="1"/>
+      <rect x="80" y="20" width="200" height="140" stroke="white" stroke-width="1"/>
+      <line x1="40" y1="60" x2="80" y2="20" stroke="white" stroke-width="1"/>
+      <line x1="240" y1="60" x2="280" y2="20" stroke="white" stroke-width="1"/>
+      <line x1="40" y1="200" x2="80" y2="160" stroke="white" stroke-width="1"/>
+      <line x1="240" y1="200" x2="280" y2="160" stroke="white" stroke-width="1"/>
+      <line x1="140" y1="60" x2="180" y2="20" stroke="white" stroke-width="0.5" stroke-dasharray="4 4"/>
+      <line x1="140" y1="200" x2="180" y2="160" stroke="white" stroke-width="0.5" stroke-dasharray="4 4"/>
+      <line x1="80" y1="20" x2="280" y2="20" stroke="white" stroke-width="0.5" stroke-dasharray="4 4"/>
+    </svg>
+
+    <div class="panel-left-body">
+      <div class="left-step-label" id="left-step-label">Step 1 of 6</div>
+      <div class="left-heading" id="left-heading">Let's start<br><em>with you.</em></div>
+      <div class="left-sub" id="left-sub">Tell us who you are — your future home starts with a conversation.</div>
+    </div>
+
+    <div class="step-dots" id="step-dots">
+      <div class="dot active" onclick="goToSlide(0)"></div>
+      <div class="dot" onclick="goToSlide(1)"></div>
+      <div class="dot" onclick="goToSlide(2)"></div>
+      <div class="dot" onclick="goToSlide(3)"></div>
+      <div class="dot" onclick="goToSlide(4)"></div>
+      <div class="dot" onclick="goToSlide(5)"></div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT PANEL ────────────────────────────── -->
+  <div class="panel-right">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill" style="width: 16.6%"></div>
+    </div>
+
+    <div class="slides" id="slides">
+
+      <!-- ── SLIDE 1: Contact ───────────────────── -->
+      <div class="slide active" id="slide-0">
+        <div class="slide-step">Step 1 — Contact</div>
+        <h2 class="slide-title">What's your name,<br>and how can we reach you?</h2>
+        <p class="slide-subtitle">We'll only use this to follow up on your enquiry.</p>
+
+        <div class="field-group">
+          <div class="field-wrap" id="fw-name">
+            <label for="f-name">Full name</label>
+            <input type="text" id="f-name" placeholder="e.g. Sarah Mitchell" autocomplete="name">
+            <span class="error-msg">Please enter your name</span>
+          </div>
+          <div class="field-wrap" id="fw-email">
+            <label for="f-email">Email address</label>
+            <input type="email" id="f-email" placeholder="sarah@example.com" autocomplete="email">
+            <span class="error-msg">Please enter a valid email</span>
+          </div>
+          <div class="field-wrap" id="fw-phone">
+            <label for="f-phone">Phone number</label>
+            <input type="tel" id="f-phone" placeholder="04xx xxx xxx" autocomplete="tel">
+            <span class="error-msg">Please enter your phone number</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SLIDE 2: Building type ─────────────── -->
+      <div class="slide" id="slide-1">
+        <div class="slide-step">Step 2 — Project type</div>
+        <h2 class="slide-title">What are you looking<br>to build?</h2>
+        <p class="slide-subtitle">Select the option that best describes your project.</p>
+
+        <div class="option-grid" id="opt-type">
+          <div class="option-card" data-val="secondary_dwelling" onclick="selectOption(this,'opt-type')">
+            <div class="option-check"></div>
+            <div class="option-icon">🏡</div>
+            <div class="option-title">Secondary Dwelling</div>
+            <div class="option-sub">Granny flat, ADU or backyard studio on existing land</div>
+          </div>
+          <div class="option-card" data-val="primary_dwelling" onclick="selectOption(this,'opt-type')">
+            <div class="option-check"></div>
+            <div class="option-icon">🏠</div>
+            <div class="option-title">Primary Home</div>
+            <div class="option-sub">A standalone house as your main residence</div>
+          </div>
+          <div class="option-card" data-val="tiny_home" onclick="selectOption(this,'opt-type')">
+            <div class="option-check"></div>
+            <div class="option-icon">🌿</div>
+            <div class="option-title">Tiny Home / Studio</div>
+            <div class="option-sub">Small, efficient and self-contained living</div>
+          </div>
+          <div class="option-card" data-val="duplex" onclick="selectOption(this,'opt-type')">
+            <div class="option-check"></div>
+            <div class="option-icon">🏢</div>
+            <div class="option-title">Duplex / Multi-Res</div>
+            <div class="option-sub">Investment property or dual occupancy</div>
+          </div>
+          <div class="option-card" data-val="commercial" onclick="selectOption(this,'opt-type')">
+            <div class="option-check"></div>
+            <div class="option-icon">🏗️</div>
+            <div class="option-title">Commercial / Gov</div>
+            <div class="option-sub">Larger scale, government or development project</div>
+          </div>
+          <div class="option-card" data-val="not_sure" onclick="selectOption(this,'opt-type')">
+            <div class="option-check"></div>
+            <div class="option-icon">💭</div>
+            <div class="option-title">Not sure yet</div>
+            <div class="option-sub">I'd like guidance on the right option</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SLIDE 3: Location & Land ──────────── -->
+      <div class="slide" id="slide-2">
+        <div class="slide-step">Step 3 — Location</div>
+        <h2 class="slide-title">Where is your<br>property?</h2>
+        <p class="slide-subtitle">We service all of NSW and beyond. Let us know where you're building.</p>
+
+        <div class="field-group cols-2">
+          <div class="field-wrap" id="fw-suburb">
+            <label for="f-suburb">Suburb</label>
+            <input type="text" id="f-suburb" placeholder="e.g. Penrith">
+            <span class="error-msg">Please enter your suburb</span>
+          </div>
+          <div class="field-wrap">
+            <label for="f-state">State</label>
+            <div class="select-wrap">
+              <select id="f-state">
+                <option value="">Select state</option>
+                <option value="NSW">NSW</option>
+                <option value="VIC">VIC</option>
+                <option value="QLD">QLD</option>
+                <option value="WA">WA</option>
+                <option value="SA">SA</option>
+                <option value="TAS">TAS</option>
+                <option value="ACT">ACT</option>
+                <option value="NT">NT</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-group" style="margin-top: 8px;">
+          <div style="margin-bottom: 8px;">
+            <label style="margin-bottom: 10px; display: block;">Do you already own the land?</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" class="check-rows">
+              <div class="check-row" id="owns-yes" onclick="toggleLandOwn('yes')">
+                <div class="check-box" id="cb-owns-yes"></div>
+                <div class="check-label">Yes — I own land<span>Ready to build</span></div>
+              </div>
+              <div class="check-row" id="owns-no" onclick="toggleLandOwn('no')">
+                <div class="check-box" id="cb-owns-no"></div>
+                <div class="check-label">Not yet<span>Still searching or exploring</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SLIDE 4: Qualification ─────────────── -->
+      <div class="slide" id="slide-3">
+        <div class="slide-step">Step 4 — Your situation</div>
+        <h2 class="slide-title">A few details<br>about your project.</h2>
+        <p class="slide-subtitle">This helps us understand where you're at — no pressure, all honest.</p>
+
+        <div class="field-group">
+          <div>
+            <label style="margin-bottom: 10px; display: block;">Finance & readiness</label>
+            <div style="display: flex; flex-direction: column; gap: 10px;" class="check-rows">
+              <div class="check-row" id="cr-cash" onclick="toggleCheck(this)">
+                <div class="check-box"></div>
+                <div class="check-label">I have finance or cash ready<span>Pre-approved, savings, or equity access</span></div>
+              </div>
+              <div class="check-row" id="cr-approvals" onclick="toggleCheck(this)">
+                <div class="check-box"></div>
+                <div class="check-label">I'll need council approvals<span>DA or CDC process — we can help</span></div>
+              </div>
+              <div class="check-row" id="cr-design" onclick="toggleCheck(this)">
+                <div class="check-box"></div>
+                <div class="check-label">I already have existing plans or designs<span>We can work with your existing documentation</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-wrap">
+            <label for="f-timeline">What's your timeline?</label>
+            <div class="select-wrap">
+              <select id="f-timeline">
+                <option value="">Select timeline</option>
+                <option value="asap">As soon as possible</option>
+                <option value="3_months">Within 3 months</option>
+                <option value="6_months">Within 6 months</option>
+                <option value="12_months">Within 12 months</option>
+                <option value="planning">Still planning — 12+ months</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SLIDE 5: Budget ───────────────────── -->
+      <div class="slide" id="slide-4">
+        <div class="slide-step">Step 5 — Budget</div>
+        <h2 class="slide-title">What's your<br>budget range?</h2>
+        <p class="slide-subtitle">Our modular homes start from $132k. Prices are all-inclusive.</p>
+
+        <div class="budget-area">
+          <div class="budget-display" id="budget-display">$180k – $250k</div>
+          <div class="budget-range-label" id="budget-range-label">Use the slider to set your range</div>
+          <input type="range" id="budget-slider" min="0" max="8" step="1" value="3"
+                 oninput="updateBudget(this.value)"
+                 style="background-size: 37.5% 100%;">
+          <div class="range-labels">
+            <span>$132k</span>
+            <span>$500k+</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 28px;">
+          <label style="margin-bottom: 10px; display: block;">How are you planning to finance this?</label>
+          <div class="chip-grid" id="chips-finance">
+            <div class="chip" data-val="cash" onclick="toggleChip(this,'chips-finance',true)">Cash / Savings</div>
+            <div class="chip" data-val="construction_loan" onclick="toggleChip(this,'chips-finance',true)">Construction Loan</div>
+            <div class="chip" data-val="equity" onclick="toggleChip(this,'chips-finance',true)">Home Equity</div>
+            <div class="chip" data-val="not_sure" onclick="toggleChip(this,'chips-finance',true)">Not sure yet</div>
+            <div class="chip" data-val="broker" onclick="toggleChip(this,'chips-finance',true)">I need a broker referral</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SLIDE 6: Final details ─────────────── -->
+      <div class="slide" id="slide-5">
+        <div class="slide-step">Step 6 — Final details</div>
+        <h2 class="slide-title">Almost there.<br>Last few things.</h2>
+        <p class="slide-subtitle">Any extra context helps us prepare for your call.</p>
+
+        <div class="field-group">
+          <div class="field-wrap">
+            <label for="f-notes">Tell us about your project</label>
+            <textarea id="f-notes" placeholder="What's your vision? Any specific requirements, design ideas, or questions you'd like to cover on the call?"></textarea>
+          </div>
+
+          <div>
+            <label style="margin-bottom: 10px; display: block;">How did you hear about Keep Modular?</label>
+            <div class="chip-grid" id="chips-source">
+              <div class="chip" data-val="instagram" onclick="toggleChip(this,'chips-source',false)">Instagram</div>
+              <div class="chip" data-val="google" onclick="toggleChip(this,'chips-source',false)">Google</div>
+              <div class="chip" data-val="referral" onclick="toggleChip(this,'chips-source',false)">Referral</div>
+              <div class="chip" data-val="facebook" onclick="toggleChip(this,'chips-source',false)">Facebook</div>
+              <div class="chip" data-val="realestate" onclick="toggleChip(this,'chips-source',false)">Real Estate site</div>
+              <div class="chip" data-val="walk_in" onclick="toggleChip(this,'chips-source',false)">Walked past factory</div>
+              <div class="chip" data-val="other" onclick="toggleChip(this,'chips-source',false)">Other</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /slides -->
+
+    <!-- Success overlay -->
+    <div class="success-screen" id="success-screen">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <h2 class="success-title">Thank you,<br><span id="success-name">we'll be in touch.</span></h2>
+      <p class="success-sub">Your enquiry is on its way to the Keep Modular team. Expect a call within one business day to discuss your project.</p>
+    </div>
+
+    <!-- ── NAV FOOTER ──────────────────────────── -->
+    <div class="nav-footer">
+      <button class="btn-back" id="btn-back" onclick="prevSlide()" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Back
+      </button>
+
+      <button class="btn-next" id="btn-next" onclick="nextSlide()">
+        Continue
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+
+  </div><!-- /panel-right -->
+</div><!-- /shell -->
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentSlide = 0;
+const TOTAL = 6;
+
+const leftContent = [
+  { label: 'Step 1 of 6', heading: "Let's start\nwith you.", sub: "Tell us who you are — your future home starts with a conversation." },
+  { label: 'Step 2 of 6', heading: "What will\nwe build?", sub: "Every Keep home begins with a clear idea of what you need." },
+  { label: 'Step 3 of 6', heading: "Where will\nit go?", sub: "Location shapes everything — from approvals to design." },
+  { label: 'Step 4 of 6', heading: "Tell us\nyour situation.", sub: "Honest answers here mean better advice from us." },
+  { label: 'Step 5 of 6', heading: "What's your\ninvestment?", sub: "All our prices are all-inclusive — no hidden surprises." },
+  { label: 'Step 6 of 6', heading: "Almost\nthere.", sub: "One more step and your enquiry is in our hands." },
+];
+
+const budgetRanges = [
+  { label: '$132k – $160k', val: 'under_160k' },
+  { label: '$160k – $200k', val: '160k_200k' },
+  { label: '$200k – $280k', val: '200k_280k' },
+  { label: '$280k – $350k', val: '280k_350k' },
+  { label: '$350k – $450k', val: '350k_450k' },
+  { label: '$450k – $600k', val: '450k_600k' },
+  { label: '$600k – $800k', val: '600k_800k' },
+  { label: '$800k – $1M',   val: '800k_1m' },
+  { label: 'Over $1M',      val: 'over_1m' },
+];
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function goToSlide(n, dir = 1) {
+  if (n < 0 || n >= TOTAL) return;
+  const cur = document.getElementById(`slide-${currentSlide}`);
+  cur.classList.remove('active');
+  cur.classList.add(dir >= 0 ? 'exit-left' : '');
+  setTimeout(() => cur.classList.remove('exit-left'), 420);
+
+  currentSlide = n;
+  const next = document.getElementById(`slide-${currentSlide}`);
+  if (dir < 0) {
+    next.style.transform = 'translateX(-40px)';
+    next.style.opacity = '0';
+    setTimeout(() => {
+      next.style.transform = '';
+      next.style.opacity = '';
+    }, 10);
+  }
+  next.classList.add('active');
+
+  updateUI();
+}
+
+function nextSlide() {
+  if (!validateSlide(currentSlide)) return;
+  if (currentSlide === TOTAL - 1) {
+    submitForm();
+    return;
+  }
+  goToSlide(currentSlide + 1, 1);
+}
+
+function prevSlide() {
+  if (currentSlide === 0) return;
+  goToSlide(currentSlide - 1, -1);
+}
+
+function updateUI() {
+  // Progress
+  const pct = ((currentSlide + 1) / TOTAL) * 100;
+  document.getElementById('progress-fill').style.width = pct + '%';
+
+  // Left panel
+  const lc = leftContent[currentSlide];
+  document.getElementById('left-step-label').textContent = lc.label;
+  document.getElementById('left-heading').innerHTML = lc.heading.replace('\n', '<br>');
+  document.getElementById('left-sub').textContent = lc.sub;
+
+  // Dots
+  const dots = document.querySelectorAll('.dot');
+  dots.forEach((d, i) => {
+    d.classList.remove('active', 'done');
+    if (i === currentSlide) d.classList.add('active');
+    else if (i < currentSlide) d.classList.add('done');
+  });
+
+  // Back button
+  document.getElementById('btn-back').disabled = currentSlide === 0;
+
+  // Next button
+  const btn = document.getElementById('btn-next');
+  if (currentSlide === TOTAL - 1) {
+    btn.innerHTML = `Submit Enquiry <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>`;
+    btn.classList.add('submit-btn');
+  } else {
+    btn.innerHTML = `Continue <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>`;
+    btn.classList.remove('submit-btn');
+  }
+}
+
+// ── Validation ────────────────────────────────────────────────────────────────
+function validateSlide(idx) {
+  let ok = true;
+  if (idx === 0) {
+    ok = validateField('fw-name', 'f-name', v => v.trim().length > 1) && ok;
+    ok = validateField('fw-email', 'f-email', v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())) && ok;
+    // Phone is helpful but not blocking — only validate if something was entered
+    const phone = document.getElementById('f-phone');
+    if (phone && phone.value.trim().length > 0) {
+      ok = validateField('fw-phone', 'f-phone', v => v.replace(/\s/g,'').length >= 8) && ok;
+    }
+  }
+  if (idx === 2) {
+    ok = validateField('fw-suburb', 'f-suburb', v => v.trim().length > 1) && ok;
+  }
+  return ok;
+}
+
+function validateField(wrapId, inputId, fn) {
+  const wrap = document.getElementById(wrapId);
+  const input = document.getElementById(inputId);
+  if (!wrap || !input) return true;
+  const valid = fn(input.value);
+  wrap.classList.toggle('has-error', !valid);
+  return valid;
+}
+
+// Clear errors on input
+document.querySelectorAll('input, select, textarea').forEach(el => {
+  el.addEventListener('input', () => {
+    const wrap = el.closest('.field-wrap');
+    if (wrap) wrap.classList.remove('has-error');
+  });
+});
+
+// ── Option cards ──────────────────────────────────────────────────────────────
+function selectOption(el, groupId) {
+  document.querySelectorAll(`#${groupId} .option-card`).forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// ── Checkbox rows ─────────────────────────────────────────────────────────────
+function toggleCheck(el) {
+  el.classList.toggle('checked');
+  const box = el.querySelector('.check-box');
+  if (box) box.classList.toggle('checked', el.classList.contains('checked'));
+}
+
+// ── Land ownership toggle ─────────────────────────────────────────────────────
+let landOwn = null;
+function toggleLandOwn(val) {
+  landOwn = val;
+  ['yes','no'].forEach(v => {
+    const row = document.getElementById(`owns-${v}`);
+    const box = document.getElementById(`cb-owns-${v}`);
+    row.classList.toggle('checked', v === val);
+  });
+}
+
+// ── Chips ─────────────────────────────────────────────────────────────────────
+function toggleChip(el, groupId, multi) {
+  if (!multi) {
+    document.querySelectorAll(`#${groupId} .chip`).forEach(c => c.classList.remove('selected'));
+  }
+  el.classList.toggle('selected');
+}
+
+// ── Budget slider ─────────────────────────────────────────────────────────────
+function updateBudget(val) {
+  const idx = parseInt(val);
+  document.getElementById('budget-display').textContent = budgetRanges[idx].label;
+  const pct = (idx / 8) * 100;
+  document.getElementById('budget-slider').style.backgroundSize = `${pct}% 100%`;
+}
+
+// Init slider
+updateBudget(3);
+
+// ── Collect form data ─────────────────────────────────────────────────────────
+function collectData() {
+  const typeSelected = document.querySelector('#opt-type .option-card.selected');
+  const finChips = [...document.querySelectorAll('#chips-finance .chip.selected')].map(c => c.dataset.val);
+  const sourceChip = document.querySelector('#chips-source .chip.selected');
+  const budgetIdx = parseInt(document.getElementById('budget-slider').value);
+
+  return {
+    name:          document.getElementById('f-name').value.trim(),
+    email:         document.getElementById('f-email').value.trim(),
+    phone:         document.getElementById('f-phone').value.trim(),
+    productInterest: typeSelected ? typeSelected.dataset.val : '',
+    suburb:        document.getElementById('f-suburb').value.trim(),
+    state:         document.getElementById('f-state').value,
+    ownsLand:      landOwn === 'yes',
+    hasAccessToCash: document.getElementById('cr-cash').classList.contains('checked'),
+    requiresApprovals: document.getElementById('cr-approvals').classList.contains('checked'),
+    hasExistingDesign: document.getElementById('cr-design').classList.contains('checked'),
+    timeline:      document.getElementById('f-timeline').value,
+    expectedBudget: budgetRanges[budgetIdx].val,
+    financeMethod:  finChips.join(','),
+    additionalNotes: document.getElementById('f-notes').value.trim(),
+    source:         sourceChip ? sourceChip.dataset.val : 'website_form',
+    hearAboutUs:    sourceChip ? sourceChip.dataset.val : '',
+  };
+}
+
+// ── Submit ────────────────────────────────────────────────────────────────────
+async function submitForm() {
+  if (!validateSlide(currentSlide)) return;
+
+  const btn = document.getElementById('btn-next');
+  btn.disabled = true;
+  btn.innerHTML = 'Submitting…';
+
+  const data = collectData();
+
+  try {
+    const res = await fetch('/api/leads/enquiry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    let l1Estimate = null;
+    if (res.ok) {
+      try {
+        const json = await res.json();
+        l1Estimate = json.l1Estimate || null;
+      } catch(e) {}
+    }
+    showSuccess(data.name, l1Estimate);
+  } catch (e) {
+    // Network error — still show success (offline-first feel)
+    showSuccess(data.name, null);
+  }
+}
+
+function showSuccess(name, l1Estimate) {
+  const firstName = name.split(' ')[0];
+  document.getElementById('success-name').textContent = firstName + ", we\u2019ll be in touch.";
+
+  // Show L1 estimate if available
+  if (l1Estimate) {
+    const sub = document.getElementById('success-sub');
+    sub.innerHTML = `
+      <div style="background:rgba(255,255,255,0.12);border-radius:12px;padding:20px 24px;margin-bottom:16px;text-align:left;">
+        <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.6;margin-bottom:6px;">Indicative Estimate</div>
+        <div style="font-size:26px;font-weight:500;margin-bottom:4px;">${l1Estimate.priceDisplay}</div>
+        <div style="font-size:13px;opacity:0.8;margin-bottom:10px;">${l1Estimate.productMatch} &nbsp;·&nbsp; ${l1Estimate.productTier}</div>
+        <div style="font-size:12px;opacity:0.65;line-height:1.5;">${l1Estimate.description}</div>
+      </div>
+      <p style="font-size:12px;opacity:0.5;line-height:1.5;">${l1Estimate.disclaimer}</p>
+      <p style="margin-top:16px;">Your enquiry is on its way to the Keep Modular team. Expect a call within one business day.</p>
+    `;
+  } else {
+    document.getElementById('success-sub').textContent = 'Your enquiry is on its way to the Keep Modular team. Expect a call within one business day to discuss your project.';
+  }
+
+  const ss = document.getElementById('success-screen');
+  ss.style.display = 'flex';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => { ss.classList.add('visible'); });
+  });
+}
+</script>
+</body>
+</html>

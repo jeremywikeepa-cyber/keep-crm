@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS variables for shadcn/ui ─────────────────────────────────────────── */
+:root {
+  --border:                 0 0% 91%;
+  --input:                  0 0% 91%;
+  --ring:                   0 0% 7%;
+  --foreground:             0 0% 7%;
+  --destructive:            0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --radius:                 0.5rem;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: #E8E8E8;
+}
+
+html { line-height: 1.5; -webkit-text-size-adjust: 100%; }
+
+body {
+  background-color: #F7F7F7;
+  color: #111111;
+  font-family: "DM Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "DM Sans", sans-serif;
+  font-weight: 600;
+  color: #111111;
+  margin: 0;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #F7F7F7; }
+::-webkit-scrollbar-thumb { background: #D4D4D4; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #AAAAAA; }
+
+/* ── Kanban ──────────────────────────────────────────────────────────────── */
+.kanban-column { min-height: 160px; }
