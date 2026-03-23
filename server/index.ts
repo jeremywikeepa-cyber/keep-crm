@@ -8,6 +8,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+const isProd = process.env.NODE_ENV === "production";
+
+// ─── TRUST PROXY (required for Replit / any reverse proxy) ───────────────────
+// Without this, express-session won't set cookies correctly behind HTTPS proxies
+app.set("trust proxy", 1);
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+  const origin = req.headers.origin || "";
+  // Allow any replit.app / repl.co origin, plus localhost for dev
+  const allowed =
+    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+    origin.endsWith(".replit.app") ||
+    origin.endsWith(".repl.co") ||
+    origin.endsWith(".replit.dev") ||
+    origin.endsWith(".kirk.replit.dev");
+
+  if (allowed) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  } else if (!origin) {
+    // Same-origin or server-to-server — allow
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
 
@@ -23,8 +55,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false, // set to true only behind HTTPS reverse proxy (Replit handles this)
+      // secure:true works because we set trust proxy above — Replit terminates TLS
+      secure: isProd,
       httpOnly: true,
+      sameSite: isProd ? "none" : "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })

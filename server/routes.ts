@@ -56,12 +56,26 @@ router.put("/users/:id", requireAuth, async (req: Request, res: Response) => {
 
 router.post("/leads/enquiry", async (req: Request, res: Response) => {
   try {
-    const {
-      name, email, phone, productInterest, suburb, state,
-      ownsLand, hasAccessToCash, requiresApprovals, hasExistingDesign,
-      timeline, expectedBudget, financeMethod, additionalNotes,
-      source, hearAboutUs, dwellingSize,
-    } = req.body;
+    const body = req.body;
+
+    // Accept both camelCase and snake_case field names (form sends snake_case)
+    const name             = body.name;
+    const email            = body.email;
+    const phone            = body.phone;
+    const productInterest  = body.productInterest  ?? body.product_interest;
+    const suburb           = body.suburb;
+    const state            = body.state;
+    const ownsLand         = body.ownsLand         ?? body.owns_land;
+    const hasAccessToCash  = body.hasAccessToCash  ?? body.has_access_to_cash;
+    const requiresApprovals= body.requiresApprovals?? body.requires_approvals;
+    const hasExistingDesign= body.hasExistingDesign?? body.has_existing_design;
+    const timeline         = body.timeline;
+    const expectedBudget   = body.expectedBudget   ?? body.expected_budget;
+    const financeMethod    = body.financeMethod     ?? body.finance_method;
+    const additionalNotes  = body.additionalNotes  ?? body.additional_notes;
+    const source           = body.source;
+    const hearAboutUs      = body.hearAboutUs       ?? body.hear_about_us;
+    const dwellingSize     = body.dwellingSize      ?? body.dwelling_size;
 
     if (!name) {
       res.status(400).json({ error: "Name is required" });
