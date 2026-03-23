@@ -82,4 +82,29 @@ export const api = {
 
   // Stats
   getStats: () => apiRequest("/api/stats"),
+
+  // Communications
+  getCommunications: (leadId: number) =>
+    apiRequest(`/api/leads/${leadId}/communications`),
+  createCommunication: (leadId: number, data: { subject: string; body: string; to?: string }) =>
+    apiRequest(`/api/leads/${leadId}/communications`, {
+      method: "POST",
+      body:   JSON.stringify(data),
+    }),
+
+  // Graph OAuth
+  getGraphOAuthUrl: () => apiRequest("/api/graph/oauth-url"),
+
+  // Loss intelligence
+  analyseLoss: (leadId: number, correspondence?: string) =>
+    apiRequest(`/api/leads/${leadId}/analyse-loss`, {
+      method: "POST",
+      body:   JSON.stringify({ correspondence }),
+    }),
+  generateWinBack: (leadId: number, data: { lossReason?: string; correspondence?: string }) =>
+    apiRequest(`/api/leads/${leadId}/win-back`, {
+      method: "POST",
+      body:   JSON.stringify(data),
+    }),
+  getLossIntelligence: () => apiRequest("/api/loss-intelligence"),
 };

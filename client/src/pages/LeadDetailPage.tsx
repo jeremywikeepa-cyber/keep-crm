@@ -24,6 +24,7 @@ import {
   financeLabel,
   dwellingSizeLabel,
   formatDate,
+  formatDateTime,
   timeAgo,
   activityTypeIcon,
   activityTypeLabel,
@@ -39,9 +40,31 @@ import {
   MessageSquare,
   Plus,
   ChevronRight,
+  Send,
+  ChevronDown,
+  ChevronUp,
+  Link,
 } from "lucide-react";
 import type { Lead } from "@shared/schema";
 import { PIPELINE_STAGES } from "@shared/schema";
+
+const EMAIL_TEMPLATES = [
+  {
+    label: "Feasibility follow-up",
+    subject: "Following up on your feasibility enquiry",
+    body: `Hi [Name],\n\nI wanted to follow up on your recent enquiry about a modular build with Keep Group.\n\nWe'd love to arrange a quick 15-minute feasibility call to understand your project better and give you a clearer picture of what's possible.\n\nAre you free for a call this week?\n\nWarm regards,\nKeep Group Team`,
+  },
+  {
+    label: "Factory visit invite",
+    subject: "Invitation to visit our Croydon factory",
+    body: `Hi [Name],\n\nWe'd love to invite you to visit our factory in Croydon to see the FORMA building system in action.\n\nSeeing the quality of our modules first-hand is the best way to understand what we build — and it only takes about an hour.\n\nLet us know a time that suits you.\n\nWarm regards,\nKeep Group Team`,
+  },
+  {
+    label: "Proposal sent – next steps",
+    subject: "Your Keep Group proposal — next steps",
+    body: `Hi [Name],\n\nThank you for taking the time to review your proposal. I wanted to check in and see if you had any questions.\n\nOur next step would be to lock in a design session to refine the configuration and move toward a fixed-price contract sum.\n\nHappy to walk you through anything.\n\nWarm regards,\nKeep Group Team`,
+  },
+];
 
 export default function LeadDetailPage() {
   const [, params] = useRoute("/leads/:id");
@@ -52,6 +75,13 @@ export default function LeadDetailPage() {
   const [noteText, setNoteText] = useState("");
   const [noteType, setNoteType] = useState("note");
   const [editingStage, setEditingStage] = useState(false);
+  const [leftTab, setLeftTab] = useState<"activity" | "communications">("activity");
+  const [expandedComm, setExpandedComm] = useState<number | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeTo, setComposeTo] = useState("");
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
 
   const { data: lead, isLoading } = useQuery<Lead>({
     queryKey: ["lead", id],
@@ -87,6 +117,32 @@ export default function LeadDetailPage() {
     mutationFn: () => api.scoreLead(id!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lead", id] });
+    },
+  });
+
+  const { data: communications = [] } = useQuery<any[]>({
+    queryKey: ["communications", id],
+    queryFn:  () => api.getCommunications(id!),
+    enabled:  !!id,
+  });
+
+  const { data: oauthData } = useQuery<{ url: string }>({
+    queryKey: ["graph-oauth-url"],
+    queryFn:  () => api.getGraphOAuthUrl(),
+    enabled:  leftTab === "communications",
+  });
+
+  const sendEmailMutation = useMutation({
+    mutationFn: () => api.createCommunication(id!, {
+      subject: composeSubject,
+      body:    composeBody,
+      to:      composeTo,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["communications", id] });
+      setComposeOpen(false);
+      setComposeSubject("");
+      setComposeBody("");
     },
   });
 
@@ -248,87 +304,305 @@ export default function LeadDetailPage() {
             </div>
           )}
 
-          {/* Add note / activity */}
-          <div style={{ backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px", padding: "16px", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
-            <h3 style={{ fontSize: "16px", fontWeight: 500, color: "#111111", fontFamily: '"DM Sans", sans-serif', margin: "0 0 12px" }}>
-              Add Activity
-            </h3>
-            <form onSubmit={handleAddNote} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <Select value={noteType} onValueChange={setNoteType}>
-                  <SelectTrigger style={{ width: "140px" }}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="note">Note</SelectItem>
-                    <SelectItem value="call">Phone Call</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="meeting">Meeting</SelectItem>
-                    <SelectItem value="site_visit">Site Visit</SelectItem>
-                    <SelectItem value="factory_visit">Factory Visit</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Textarea
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                placeholder="Add a note or log an activity..."
-                rows={3}
-              />
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <Button type="submit" size="sm" disabled={!noteText.trim() || addNoteMutation.isPending}>
-                  {addNoteMutation.isPending ? (
-                    <Loader2 style={{ width: "14px", height: "14px", marginRight: "6px" }} className="animate-spin" />
-                  ) : (
-                    <Plus style={{ width: "14px", height: "14px", marginRight: "6px" }} />
-                  )}
-                  Add
-                </Button>
-              </div>
-            </form>
-          </div>
-
-          {/* Activity feed */}
-          <div style={{ backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}>
-            <div style={{ padding: "16px 16px 12px" }}>
-              <h3 style={{ fontSize: "16px", fontWeight: 500, color: "#111111", fontFamily: '"DM Sans", sans-serif', margin: 0 }}>
-                Activity
-              </h3>
+          {/* Tab bar: Activity | Communications */}
+          <div style={{ backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px", boxShadow: "0 1px 2px rgba(0,0,0,0.06)", overflow: "hidden" }}>
+            {/* Tab headers */}
+            <div style={{ display: "flex", borderBottom: "1px solid #E8E8E8" }}>
+              {(["activity", "communications"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setLeftTab(tab)}
+                  style={{
+                    padding: "12px 16px",
+                    border: "none",
+                    borderBottom: leftTab === tab ? "2px solid #4A5240" : "2px solid transparent",
+                    backgroundColor: "transparent",
+                    color: leftTab === tab ? "#111111" : "#999999",
+                    fontSize: "13px",
+                    fontWeight: leftTab === tab ? 600 : 400,
+                    fontFamily: '"DM Sans", sans-serif',
+                    cursor: "pointer",
+                    marginBottom: "-1px",
+                    transition: "color 0.12s",
+                  }}
+                >
+                  {tab === "activity" ? "Activity" : "Communications"}
+                </button>
+              ))}
             </div>
-            <div style={{ borderTop: "1px solid #E8E8E8" }}>
-              {activities.length === 0 ? (
-                <div style={{ padding: "32px 16px", textAlign: "center" }}>
-                  <p style={{ fontSize: "14px", color: "#999999", fontFamily: '"DM Sans", sans-serif' }}>No activity yet</p>
+
+            {/* ── Activity tab ─────────────────────────────────────────────── */}
+            {leftTab === "activity" && (
+              <>
+                {/* Add note / activity */}
+                <div style={{ padding: "16px", borderBottom: "1px solid #E8E8E8" }}>
+                  <h3 style={{ fontSize: "14px", fontWeight: 500, color: "#111111", fontFamily: '"DM Sans", sans-serif', margin: "0 0 12px" }}>
+                    Add Activity
+                  </h3>
+                  <form onSubmit={handleAddNote} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Select value={noteType} onValueChange={setNoteType}>
+                        <SelectTrigger style={{ width: "140px" }}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="note">Note</SelectItem>
+                          <SelectItem value="call">Phone Call</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="meeting">Meeting</SelectItem>
+                          <SelectItem value="site_visit">Site Visit</SelectItem>
+                          <SelectItem value="factory_visit">Factory Visit</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Textarea
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      placeholder="Add a note or log an activity..."
+                      rows={3}
+                    />
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <Button type="submit" size="sm" disabled={!noteText.trim() || addNoteMutation.isPending}>
+                        {addNoteMutation.isPending ? (
+                          <Loader2 style={{ width: "14px", height: "14px", marginRight: "6px" }} className="animate-spin" />
+                        ) : (
+                          <Plus style={{ width: "14px", height: "14px", marginRight: "6px" }} />
+                        )}
+                        Add
+                      </Button>
+                    </div>
+                  </form>
                 </div>
-              ) : (
-                activities.map((activity: any) => (
-                  <div
-                    key={activity.id}
-                    style={{ padding: "12px 16px", borderBottom: "1px solid #E8E8E8", display: "flex", gap: "10px", alignItems: "flex-start" }}
-                  >
-                    <span style={{ fontSize: "16px", flexShrink: 0, marginTop: "1px" }}>{activityTypeIcon(activity.type)}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" }}>
-                        <p style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", color: "#999999", fontFamily: '"DM Sans", sans-serif', margin: 0 }}>
-                          {activityTypeLabel(activity.type)}
-                        </p>
-                        <span style={{ fontSize: "11px", color: "#999999", fontFamily: '"DM Sans", sans-serif', flexShrink: 0 }}>
-                          {timeAgo(activity.createdAt)}
-                        </span>
+
+                {/* Activity feed */}
+                <div>
+                  {activities.length === 0 ? (
+                    <div style={{ padding: "32px 16px", textAlign: "center" }}>
+                      <p style={{ fontSize: "14px", color: "#999999", fontFamily: '"DM Sans", sans-serif' }}>No activity yet</p>
+                    </div>
+                  ) : (
+                    activities.map((activity: any) => (
+                      <div
+                        key={activity.id}
+                        style={{ padding: "12px 16px", borderBottom: "1px solid #E8E8E8", display: "flex", gap: "10px", alignItems: "flex-start" }}
+                      >
+                        <span style={{ fontSize: "16px", flexShrink: 0, marginTop: "1px" }}>{activityTypeIcon(activity.type)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" }}>
+                            <p style={{ fontSize: "11px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em", color: "#999999", fontFamily: '"DM Sans", sans-serif', margin: 0 }}>
+                              {activityTypeLabel(activity.type)}
+                            </p>
+                            <span style={{ fontSize: "11px", color: "#999999", fontFamily: '"DM Sans", sans-serif', flexShrink: 0 }}>
+                              {timeAgo(activity.createdAt)}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "14px", color: "#111111", fontFamily: '"DM Sans", sans-serif', margin: "4px 0 0", lineHeight: 1.5 }}>
+                            {activity.title}
+                          </p>
+                          {activity.body && (
+                            <p style={{ fontSize: "13px", color: "#666666", fontFamily: '"DM Sans", sans-serif', margin: "4px 0 0", lineHeight: 1.5 }}>
+                              {activity.body}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <p style={{ fontSize: "14px", color: "#111111", fontFamily: '"DM Sans", sans-serif', margin: "4px 0 0", lineHeight: 1.5 }}>
-                        {activity.title}
-                      </p>
-                      {activity.body && (
-                        <p style={{ fontSize: "13px", color: "#666666", fontFamily: '"DM Sans", sans-serif', margin: "4px 0 0", lineHeight: 1.5 }}>
-                          {activity.body}
-                        </p>
-                      )}
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── Communications tab ───────────────────────────────────────── */}
+            {leftTab === "communications" && (
+              <>
+                {/* Toolbar */}
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid #E8E8E8", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                  <span style={{ fontSize: "13px", color: "#666666", fontFamily: '"DM Sans", sans-serif' }}>
+                    {communications.length} email{communications.length !== 1 ? "s" : ""}
+                  </span>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    {oauthData?.url && (
+                      <a
+                        href={oauthData.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: "flex", alignItems: "center", gap: "4px",
+                          fontSize: "12px", color: "#4A5240", fontFamily: '"DM Sans", sans-serif',
+                          textDecoration: "none", padding: "4px 10px",
+                          border: "1px solid #4A5240", borderRadius: "5px",
+                        }}
+                      >
+                        <Link size={12} />
+                        Connect Outlook
+                      </a>
+                    )}
+                    <button
+                      onClick={() => {
+                        setComposeTo(lead.email || "");
+                        setComposeOpen(!composeOpen);
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: "4px",
+                        padding: "5px 10px", backgroundColor: "#111111", color: "#FFFFFF",
+                        border: "none", borderRadius: "5px", fontSize: "12px",
+                        fontFamily: '"DM Sans", sans-serif', cursor: "pointer",
+                      }}
+                    >
+                      <Send size={11} />
+                      Compose
+                    </button>
+                  </div>
+                </div>
+
+                {/* Compose panel */}
+                {composeOpen && (
+                  <div style={{ padding: "16px", borderBottom: "1px solid #E8E8E8", backgroundColor: "#FAFAFA" }}>
+                    {/* Template selector */}
+                    <div style={{ marginBottom: "10px" }}>
+                      <select
+                        value={selectedTemplate}
+                        onChange={(e) => {
+                          const t = EMAIL_TEMPLATES.find(t => t.label === e.target.value);
+                          if (t) {
+                            setComposeSubject(t.subject);
+                            setComposeBody(t.body.replace("[Name]", lead.name.split(" ")[0]));
+                            setSelectedTemplate(e.target.value);
+                          } else {
+                            setSelectedTemplate("");
+                          }
+                        }}
+                        style={{
+                          width: "100%", padding: "6px 10px", border: "1px solid #E8E8E8",
+                          borderRadius: "5px", fontSize: "13px", backgroundColor: "#FFFFFF",
+                          color: "#111111", fontFamily: '"DM Sans", sans-serif',
+                        }}
+                      >
+                        <option value="">— Use a template —</option>
+                        {EMAIL_TEMPLATES.map(t => (
+                          <option key={t.label} value={t.label}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <input
+                        type="email"
+                        value={composeTo}
+                        onChange={(e) => setComposeTo(e.target.value)}
+                        placeholder="To"
+                        style={{
+                          padding: "6px 10px", border: "1px solid #E8E8E8", borderRadius: "5px",
+                          fontSize: "13px", fontFamily: '"DM Sans", sans-serif', color: "#111111",
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={composeSubject}
+                        onChange={(e) => setComposeSubject(e.target.value)}
+                        placeholder="Subject"
+                        style={{
+                          padding: "6px 10px", border: "1px solid #E8E8E8", borderRadius: "5px",
+                          fontSize: "13px", fontFamily: '"DM Sans", sans-serif', color: "#111111",
+                        }}
+                      />
+                      <textarea
+                        value={composeBody}
+                        onChange={(e) => setComposeBody(e.target.value)}
+                        placeholder="Message body…"
+                        rows={6}
+                        style={{
+                          padding: "8px 10px", border: "1px solid #E8E8E8", borderRadius: "5px",
+                          fontSize: "13px", fontFamily: '"DM Sans", sans-serif', color: "#111111",
+                          resize: "vertical",
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button
+                          onClick={() => setComposeOpen(false)}
+                          style={{
+                            padding: "6px 14px", border: "1px solid #E8E8E8", borderRadius: "5px",
+                            backgroundColor: "transparent", fontSize: "13px",
+                            fontFamily: '"DM Sans", sans-serif', cursor: "pointer", color: "#666666",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => sendEmailMutation.mutate()}
+                          disabled={!composeSubject.trim() || !composeBody.trim() || sendEmailMutation.isPending}
+                          style={{
+                            padding: "6px 14px", border: "none", borderRadius: "5px",
+                            backgroundColor: "#111111", color: "#FFFFFF", fontSize: "13px",
+                            fontFamily: '"DM Sans", sans-serif', cursor: "pointer",
+                            display: "flex", alignItems: "center", gap: "5px",
+                            opacity: (!composeSubject.trim() || !composeBody.trim()) ? 0.5 : 1,
+                          }}
+                        >
+                          {sendEmailMutation.isPending
+                            ? <Loader2 size={12} className="animate-spin" />
+                            : <Send size={12} />}
+                          Send
+                        </button>
+                      </div>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                )}
+
+                {/* Email list */}
+                {communications.length === 0 ? (
+                  <div style={{ padding: "32px 16px", textAlign: "center" }}>
+                    <p style={{ fontSize: "14px", color: "#999999", fontFamily: '"DM Sans", sans-serif' }}>No emails yet</p>
+                  </div>
+                ) : (
+                  communications.map((comm: any) => (
+                    <div key={comm.id} style={{ borderBottom: "1px solid #E8E8E8" }}>
+                      <button
+                        onClick={() => setExpandedComm(expandedComm === comm.id ? null : comm.id)}
+                        style={{
+                          width: "100%", padding: "12px 16px", display: "flex",
+                          alignItems: "flex-start", gap: "10px", border: "none",
+                          backgroundColor: "transparent", cursor: "pointer", textAlign: "left",
+                        }}
+                      >
+                        <div style={{
+                          width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
+                          backgroundColor: comm.direction === "inbound" ? "#EEF2FF" : "#F0FDF4",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <Mail size={12} style={{ color: comm.direction === "inbound" ? "#4338CA" : "#16A34A" }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "8px" }}>
+                            <span style={{ fontSize: "13px", fontWeight: 500, color: "#111111", fontFamily: '"DM Sans", sans-serif', overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {comm.subject || "(no subject)"}
+                            </span>
+                            <span style={{ fontSize: "11px", color: "#999999", fontFamily: '"DM Sans", sans-serif', flexShrink: 0 }}>
+                              {timeAgo(comm.sentAt || comm.createdAt)}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "12px", color: "#666666", fontFamily: '"DM Sans", sans-serif', margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {comm.direction === "inbound" ? "Received" : "Sent"} · {comm.bodyPreview || "—"}
+                          </p>
+                        </div>
+                        {expandedComm === comm.id
+                          ? <ChevronUp size={14} style={{ color: "#999999", flexShrink: 0, marginTop: "4px" }} />
+                          : <ChevronDown size={14} style={{ color: "#999999", flexShrink: 0, marginTop: "4px" }} />}
+                      </button>
+                      {expandedComm === comm.id && (
+                        <div style={{ padding: "0 16px 16px 54px" }}>
+                          <div style={{ padding: "10px 12px", backgroundColor: "#F7F7F7", borderRadius: "6px", fontSize: "13px", color: "#111111", fontFamily: '"DM Sans", sans-serif', lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                            {comm.fullBody || comm.bodyPreview || "—"}
+                          </div>
+                          <p style={{ fontSize: "11px", color: "#999999", fontFamily: '"DM Sans", sans-serif', margin: "6px 0 0" }}>
+                            {formatDateTime(comm.sentAt || comm.createdAt)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </>
+            )}
           </div>
         </div>
 

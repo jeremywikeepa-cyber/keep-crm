@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, Users, Settings, LogOut, Plus } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, Plus, TrendingDown, BarChart2 } from "lucide-react";
 import { api } from "../lib/api";
 
 interface SidebarProps {
@@ -8,9 +8,11 @@ interface SidebarProps {
 }
 
 const navLinks = [
-  { href: "/",         label: "Dashboard", icon: LayoutDashboard },
-  { href: "/leads",    label: "Leads",     icon: Users },
-  { href: "/settings", label: "Settings",  icon: Settings },
+  { href: "/",                  label: "Dashboard",        icon: LayoutDashboard },
+  { href: "/leads",             label: "Leads",            icon: Users },
+  { href: "/lost-intelligence", label: "Lost Intelligence", icon: TrendingDown },
+  { href: "/intelligence",      label: "Intelligence",     icon: BarChart2 },
+  { href: "/settings",          label: "Settings",         icon: Settings },
 ];
 
 const K_LOGO = "https://static.showit.co/200/0CrL-cInTnquIoalvzzssQ/219535/keep-mini-spaces-icon-dark-olive-rgb-900px-w-72ppi.png";

@@ -3,6 +3,7 @@ import session from "express-session";
 import path from "path";
 import { fileURLToPath } from "url";
 import routes from "./routes.js";
+import { startEmailPolling } from "./emailSync.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -103,6 +104,11 @@ app.listen(PORT, () => {
   console.log(`   Server running on http://localhost:${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`   Database: ${process.env.DATABASE_URL ? "Connected" : "NOT CONFIGURED"}\n`);
+
+  // Start Outlook email polling if MS tokens are configured
+  if (process.env.MS_ACCESS_TOKEN) {
+    startEmailPolling();
+  }
 });
 
 export default app;

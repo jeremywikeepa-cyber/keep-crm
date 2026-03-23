@@ -1,0 +1,229 @@
+// Microsoft Graph API integration for Outlook email
+// OAuth2 flow: Azure AD v2 (works for both personal and work accounts)
+
+const TENANT      = process.env.MS_TENANT_ID   || "common";
+const CLIENT_ID   = process.env.MS_CLIENT_ID   || "";
+const CLIENT_SECRET = process.env.MS_CLIENT_SECRET || "";
+const REDIRECT_URI = process.env.MS_REDIRECT_URI || "http://localhost:5000/api/graph/callback";
+
+const GRAPH_BASE  = "https://graph.microsoft.com/v1.0";
+const TOKEN_URL   = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`;
+const AUTH_URL    = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/authorize`;
+
+const SCOPES = [
+  "Mail.Read",
+  "Mail.Send",
+  "Mail.ReadWrite",
+  "offline_access",
+  "Files.ReadWrite",
+].join(" ");
+
+// ── In-memory token store (replace with DB persistence in production) ─────────
+
+let _accessToken  = process.env.MS_ACCESS_TOKEN  || "";
+let _refreshToken = process.env.MS_REFRESH_TOKEN || "";
+let _tokenExpiry  = 0; // unix ms
+
+export function setTokens(access: string, refresh: string, expiresIn: number) {
+  _accessToken  = access;
+  _refreshToken = refresh;
+  _tokenExpiry  = Date.now() + (expiresIn - 60) * 1000; // refresh 60s early
+}
+
+export function hasTokens(): boolean {
+  return !!_accessToken;
+}
+
+// ── OAuth URL ──────────────────────────────────────────────────────────────────
+
+export function getOAuthUrl(): string {
+  const params = new URLSearchParams({
+    client_id:     CLIENT_ID,
+    response_type: "code",
+    redirect_uri:  REDIRECT_URI,
+    response_mode: "query",
+    scope:         SCOPES,
+    prompt:        "select_account",
+  });
+  return `${AUTH_URL}?${params.toString()}`;
+}
+
+// ── Token refresh ─────────────────────────────────────────────────────────────
+
+export async function refreshAccessToken(): Promise<void> {
+  if (!_refreshToken) throw new Error("No refresh token available");
+
+  const body = new URLSearchParams({
+    client_id:     CLIENT_ID,
+    client_secret: CLIENT_SECRET,
+    grant_type:    "refresh_token",
+    refresh_token: _refreshToken,
+    redirect_uri:  REDIRECT_URI,
+  });
+
+  const res = await fetch(TOKEN_URL, {
+    method:  "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body:    body.toString(),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Token refresh failed: ${err}`);
+  }
+
+  const data = await res.json() as {
+    access_token:  string;
+    refresh_token?: string;
+    expires_in:    number;
+  };
+
+  setTokens(
+    data.access_token,
+    data.refresh_token || _refreshToken,
+    data.expires_in,
+  );
+}
+
+// ── Exchange auth code for tokens ─────────────────────────────────────────────
+
+export async function exchangeCode(code: string): Promise<void> {
+  const body = new URLSearchParams({
+    client_id:     CLIENT_ID,
+    client_secret: CLIENT_SECRET,
+    grant_type:    "authorization_code",
+    code,
+    redirect_uri:  REDIRECT_URI,
+    scope:         SCOPES,
+  });
+
+  const res = await fetch(TOKEN_URL, {
+    method:  "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body:    body.toString(),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Code exchange failed: ${err}`);
+  }
+
+  const data = await res.json() as {
+    access_token:  string;
+    refresh_token?: string;
+    expires_in:    number;
+  };
+
+  setTokens(data.access_token, data.refresh_token || "", data.expires_in);
+}
+
+// ── Authenticated Graph fetch (auto-refreshes on 401) ─────────────────────────
+
+export async function graphRequest(
+  path: string,
+  options: RequestInit = {},
+  retry = true,
+): Promise<any> {
+  // Proactively refresh if token is expiring soon
+  if (_tokenExpiry && Date.now() > _tokenExpiry && _refreshToken) {
+    await refreshAccessToken();
+  }
+
+  const res = await fetch(`${GRAPH_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Authorization": `Bearer ${_accessToken}`,
+      "Content-Type":  "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  if (res.status === 401 && retry && _refreshToken) {
+    await refreshAccessToken();
+    return graphRequest(path, options, false);
+  }
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Graph API ${res.status}: ${err}`);
+  }
+
+  // 204 No Content — return empty object
+  if (res.status === 204) return {};
+  return res.json();
+}
+
+// ── Poll inbox for new emails ──────────────────────────────────────────────────
+
+export interface GraphMessage {
+  id:             string;
+  conversationId: string;
+  subject:        string;
+  bodyPreview:    string;
+  body:           { content: string; contentType: string };
+  receivedDateTime: string;
+  from:           { emailAddress: { address: string; name: string } };
+  toRecipients:   Array<{ emailAddress: { address: string; name: string } }>;
+}
+
+export async function pollNewEmails(sinceHours = 1): Promise<GraphMessage[]> {
+  const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
+  const filter = encodeURIComponent(`receivedDateTime ge ${since}`);
+  const select = "id,conversationId,subject,bodyPreview,body,receivedDateTime,from,toRecipients";
+
+  const data = await graphRequest(
+    `/me/mailFolders/inbox/messages?$filter=${filter}&$select=${select}&$top=50&$orderby=receivedDateTime+desc`,
+  );
+  return (data.value || []) as GraphMessage[];
+}
+
+// ── Send email ────────────────────────────────────────────────────────────────
+
+export async function sendEmail(
+  to: string,
+  subject: string,
+  body: string,
+  threadId?: string,
+): Promise<void> {
+  const message: any = {
+    subject,
+    body: {
+      contentType: "HTML",
+      content:     body,
+    },
+    toRecipients: [
+      { emailAddress: { address: to } },
+    ],
+  };
+
+  // If replying to a thread, use the reply endpoint
+  if (threadId) {
+    const thread = await graphRequest(
+      `/me/messages?$filter=${encodeURIComponent(`conversationId eq '${threadId}'`)}&$top=1&$select=id`,
+    );
+    const msgId = thread.value?.[0]?.id;
+    if (msgId) {
+      await graphRequest(`/me/messages/${msgId}/reply`, {
+        method: "POST",
+        body:   JSON.stringify({ message: { body: message.body, toRecipients: message.toRecipients } }),
+      });
+      return;
+    }
+  }
+
+  await graphRequest("/me/sendMail", {
+    method: "POST",
+    body:   JSON.stringify({ message, saveToSentItems: true }),
+  });
+}
+
+// ── Get email thread ──────────────────────────────────────────────────────────
+
+export async function getEmailThread(conversationId: string): Promise<GraphMessage[]> {
+  const filter = encodeURIComponent(`conversationId eq '${conversationId}'`);
+  const select = "id,conversationId,subject,bodyPreview,body,receivedDateTime,from,toRecipients";
+  const data   = await graphRequest(
+    `/me/messages?$filter=${filter}&$select=${select}&$orderby=receivedDateTime+asc`,
+  );
+  return (data.value || []) as GraphMessage[];
+}

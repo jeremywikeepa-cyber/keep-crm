@@ -36,6 +36,10 @@ export const leads = pgTable("leads", {
   additionalNotes: text("additional_notes"),
   dwellingSize: varchar("dwelling_size", { length: 50 }),
   onedriveFolderUrl: text("onedrive_folder_url"),
+  lossReason: varchar("loss_reason", { length: 255 }),
+  lossStage: varchar("loss_stage", { length: 50 }),
+  winBackSent: boolean("win_back_sent").default(false),
+  winBackResponse: boolean("win_back_response").default(false),
   archived: boolean("archived").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -64,6 +68,19 @@ export const leadNotes = pgTable("lead_notes", {
   completedAt: timestamp("completed_at"),
 });
 
+export const communications = pgTable("communications", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id").references(() => leads.id).notNull(),
+  direction: varchar("direction", { length: 20 }).notNull(), // 'inbound' | 'outbound'
+  subject: text("subject"),
+  bodyPreview: text("body_preview"),
+  fullBody: text("full_body"),
+  msMessageId: varchar("ms_message_id", { length: 512 }).unique(),
+  msThreadId: varchar("ms_thread_id", { length: 512 }),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
@@ -72,6 +89,8 @@ export type LeadActivity = typeof leadActivities.$inferSelect;
 export type InsertLeadActivity = typeof leadActivities.$inferInsert;
 export type LeadNote = typeof leadNotes.$inferSelect;
 export type InsertLeadNote = typeof leadNotes.$inferInsert;
+export type Communication = typeof communications.$inferSelect;
+export type InsertCommunication = typeof communications.$inferInsert;
 
 // Stage constants
 export const PIPELINE_STAGES = [

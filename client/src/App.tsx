@@ -6,6 +6,8 @@ import LeadsPage from "./pages/LeadsPage";
 import LeadDetailPage from "./pages/LeadDetailPage";
 import NewLeadPage from "./pages/NewLeadPage";
 import SettingsPage from "./pages/SettingsPage";
+import LostIntelligencePage from "./pages/LostIntelligencePage";
+import IntelligencePage from "./pages/IntelligencePage";
 import Sidebar from "./components/Sidebar";
 import { apiRequest } from "./lib/api";
 
@@ -46,6 +48,8 @@ export default function App() {
             <Route path="/leads/new" component={NewLeadPage} />
             <Route path="/leads/:id" component={LeadDetailPage} />
             <Route path="/settings" component={SettingsPage} />
+            <Route path="/lost-intelligence" component={LostIntelligencePage} />
+            <Route path="/intelligence" component={IntelligencePage} />
             <Route>
               <div style={{ textAlign: "center", paddingTop: "5rem" }}>
                 <h2 style={{ fontFamily: '"DM Sans", sans-serif', fontSize: "1.5rem", fontWeight: 600, color: "#111111" }}>

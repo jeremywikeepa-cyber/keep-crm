@@ -5,6 +5,7 @@ import {
   leads,
   leadActivities,
   leadNotes,
+  communications,
   type User,
   type InsertUser,
   type Lead,
@@ -13,6 +14,8 @@ import {
   type InsertLeadActivity,
   type LeadNote,
   type InsertLeadNote,
+  type Communication,
+  type InsertCommunication,
 } from "../shared/schema.js";
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
@@ -78,6 +81,15 @@ export async function getLeadById(id: number): Promise<Lead | undefined> {
     .select()
     .from(leads)
     .where(eq(leads.id, id))
+    .limit(1);
+  return result[0];
+}
+
+export async function getLeadByEmail(email: string): Promise<Lead | undefined> {
+  const result = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.email, email), eq(leads.archived, false)))
     .limit(1);
   return result[0];
 }
@@ -252,4 +264,66 @@ export async function getOpenNotesCount(): Promise<number> {
     .from(leadNotes)
     .where(eq(leadNotes.status, "open"));
   return Number(result[0]?.count ?? 0);
+}
+
+// ─── COMMUNICATIONS ───────────────────────────────────────────────────────────
+
+export async function getCommunicationsForLead(
+  leadId: number
+): Promise<Communication[]> {
+  return db
+    .select()
+    .from(communications)
+    .where(eq(communications.leadId, leadId))
+    .orderBy(desc(communications.sentAt));
+}
+
+export async function createCommunication(
+  data: InsertCommunication
+): Promise<Communication> {
+  const result = await db.insert(communications).values(data).returning();
+  return result[0];
+}
+
+export async function getCommunicationByMsId(
+  msMessageId: string
+): Promise<Communication | undefined> {
+  const result = await db
+    .select()
+    .from(communications)
+    .where(eq(communications.msMessageId, msMessageId))
+    .limit(1);
+  return result[0];
+}
+
+export async function updateLeadLossData(
+  id: number,
+  data: { lossReason?: string; lossStage?: string }
+): Promise<Lead | undefined> {
+  return updateLead(id, data);
+}
+
+// ─── LOSS INTELLIGENCE ────────────────────────────────────────────────────────
+
+export async function getLossStats(): Promise<{
+  byReason: Record<string, number>;
+  byStage:  Record<string, number>;
+  total:    number;
+}> {
+  const lost = await db
+    .select()
+    .from(leads)
+    .where(and(eq(leads.archived, true)));
+
+  const byReason: Record<string, number> = {};
+  const byStage:  Record<string, number> = {};
+
+  for (const lead of lost) {
+    const reason = lead.lossReason || "unknown";
+    const stage  = lead.lossStage  || lead.stage || "unknown";
+    byReason[reason] = (byReason[reason] || 0) + 1;
+    byStage[stage]   = (byStage[stage]   || 0) + 1;
+  }
+
+  return { byReason, byStage, total: lost.length };
 }

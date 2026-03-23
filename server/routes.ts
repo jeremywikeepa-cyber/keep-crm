@@ -4,6 +4,7 @@ import { requireAuth, loginHandler, logoutHandler, meHandler } from "./auth.js";
 import * as storage from "./storage.js";
 import type { InsertLead, InsertLeadActivity, InsertLeadNote, InsertUser } from "../shared/schema.js";
 import { generateL1Estimate } from "./l1-estimate.js";
+import { getOAuthUrl, exchangeCode, sendEmail, getEmailThread, hasTokens } from "./graph.js";
 
 const router = Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -618,5 +619,270 @@ router.get("/stats", requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
+
+// ─── COMMUNICATIONS ────────────────────────────────────────────────────────────
+
+router.get(
+  "/leads/:id/communications",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const comms = await storage.getCommunicationsForLead(id);
+      res.json(comms);
+    } catch (error) {
+      console.error("Error fetching communications:", error);
+      res.status(500).json({ error: "Failed to fetch communications" });
+    }
+  }
+);
+
+router.post(
+  "/leads/:id/communications",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const leadId = parseInt(req.params.id);
+      const lead = await storage.getLeadById(leadId);
+      if (!lead) {
+        res.status(404).json({ error: "Lead not found" });
+        return;
+      }
+
+      const { subject, body, to } = req.body as {
+        subject: string;
+        body:    string;
+        to?:     string;
+      };
+
+      // Send via Graph if connected; otherwise just record
+      const recipient = to || lead.email || "";
+      if (hasTokens() && recipient) {
+        await sendEmail(recipient, subject, body);
+      }
+
+      const comm = await storage.createCommunication({
+        leadId,
+        direction:   "outbound",
+        subject:     subject || "",
+        bodyPreview: body.slice(0, 200),
+        fullBody:    body,
+        sentAt:      new Date(),
+      });
+
+      // Log activity
+      await storage.createActivity({
+        leadId,
+        type:  "email",
+        title: `Email sent: ${subject}`,
+      });
+
+      res.status(201).json(comm);
+    } catch (error) {
+      console.error("Error creating communication:", error);
+      res.status(500).json({ error: "Failed to send communication" });
+    }
+  }
+);
+
+// ─── MICROSOFT GRAPH OAUTH ────────────────────────────────────────────────────
+
+router.get("/graph/oauth-url", requireAuth, (req: Request, res: Response) => {
+  res.json({ url: getOAuthUrl() });
+});
+
+router.get("/graph/callback", async (req: Request, res: Response) => {
+  const code = req.query.code as string | undefined;
+  if (!code) {
+    res.status(400).send("Missing code parameter");
+    return;
+  }
+
+  try {
+    await exchangeCode(code);
+    // Log tokens to console for manual .env update
+    console.log("[graph] OAuth callback success. Tokens stored in memory.");
+    console.log("[graph] To persist tokens, add MS_ACCESS_TOKEN and MS_REFRESH_TOKEN to .env");
+
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Outlook Connected — Keep Group CRM</title>
+          <style>
+            body { font-family: "DM Sans", sans-serif; background: #F7F7F7; display: flex;
+                   align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+            .card { background: #fff; border: 1px solid #E8E8E8; border-radius: 10px;
+                    padding: 2.5rem 3rem; max-width: 420px; text-align: center; }
+            h1 { color: #111; font-size: 1.375rem; margin: 0 0 0.5rem; }
+            p  { color: #666; font-size: 0.875rem; line-height: 1.6; }
+            .badge { display: inline-block; background: #ECFDF5; color: #059669;
+                     font-size: 0.75rem; font-weight: 600; border-radius: 999px;
+                     padding: 0.25rem 0.75rem; margin-bottom: 1rem; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="badge">Connected</div>
+            <h1>Outlook linked</h1>
+            <p>Your Microsoft account is now connected to Trixie OS.<br>
+               You can close this tab and return to the CRM.</p>
+          </div>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error("[graph] OAuth callback error:", err);
+    res.status(500).send("OAuth exchange failed. Check server logs.");
+  }
+});
+
+// ─── LOSS INTELLIGENCE ────────────────────────────────────────────────────────
+
+router.post(
+  "/leads/:id/analyse-loss",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const lead = await storage.getLeadById(id);
+      if (!lead) {
+        res.status(404).json({ error: "Lead not found" });
+        return;
+      }
+
+      const { correspondence } = req.body as { correspondence?: string };
+
+      const context = `
+Lead: ${lead.name}
+Stage when lost: ${lead.stage}
+Product interest: ${lead.productInterest || "unknown"}
+Budget: ${lead.expectedBudget || "unknown"}
+Timeline: ${lead.timeline || "unknown"}
+AI Classification: ${lead.aiClassification || "unknown"}
+Correspondence:
+${correspondence || "(no correspondence provided)"}
+      `.trim();
+
+      let analysis = {
+        lossReason:    "unknown",
+        summary:       "",
+        winBackChance: "low" as "high" | "medium" | "low",
+        recommendation: "",
+      };
+
+      if (process.env.ANTHROPIC_API_KEY) {
+        const msg = await anthropic.messages.create({
+          model:      "claude-sonnet-4-6",
+          max_tokens: 600,
+          messages: [{
+            role: "user",
+            content: `You are Trixie, the AI for Keep Group modular construction. Analyse why this lead was lost and return ONLY valid JSON with:
+- "lossReason": short label (e.g. "price", "timeline", "competitor", "not_ready", "no_response", "budget", "location", "other")
+- "summary": 2-3 sentence summary of why they likely dropped off
+- "winBackChance": "high", "medium", or "low"
+- "recommendation": specific win-back approach for this lead
+
+${context}
+
+Return only valid JSON.`,
+          }],
+        });
+
+        const content = msg.content[0];
+        if (content.type === "text") {
+          try {
+            analysis = JSON.parse(content.text);
+          } catch {
+            analysis.summary = content.text;
+          }
+        }
+      }
+
+      // Persist loss reason
+      await storage.updateLeadLossData(id, {
+        lossReason: analysis.lossReason,
+        lossStage:  lead.stage,
+      });
+
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error analysing loss:", error);
+      res.status(500).json({ error: "Failed to analyse loss" });
+    }
+  }
+);
+
+router.post(
+  "/leads/:id/win-back",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(req.params.id);
+      const lead = await storage.getLeadById(id);
+      if (!lead) {
+        res.status(404).json({ error: "Lead not found" });
+        return;
+      }
+
+      const { lossReason, correspondence } = req.body as {
+        lossReason?:    string;
+        correspondence?: string;
+      };
+
+      let draft = {
+        subject: `Checking in — ${lead.name}`,
+        body:    "",
+      };
+
+      if (process.env.ANTHROPIC_API_KEY) {
+        const msg = await anthropic.messages.create({
+          model:      "claude-sonnet-4-6",
+          max_tokens: 600,
+          messages: [{
+            role: "user",
+            content: `You are writing a win-back email for Keep Group (modular construction, Sydney AU).
+Lead: ${lead.name} | Lost at: ${lead.stage} | Reason: ${lossReason || "unknown"} | Product: ${lead.productInterest || "unknown"}
+${correspondence ? `Context from correspondence:\n${correspondence}` : ""}
+
+Write a SHORT, warm, non-pushy win-back email. 3-4 sentences max. No subject line in the body.
+Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
+          }],
+        });
+
+        const content = msg.content[0];
+        if (content.type === "text") {
+          try {
+            draft = JSON.parse(content.text);
+          } catch {
+            draft.body = content.text;
+          }
+        }
+      } else {
+        draft.body = `Hi ${lead.name.split(" ")[0]},\n\nJust wanted to check in and see if you're still exploring options for your modular build. We have some new Duo-Forma configurations that might suit your situation.\n\nHappy to chat if the timing is better now.\n\nWarm regards,\nThe Keep Group Team`;
+      }
+
+      // NOTE: This endpoint returns a draft ONLY — it does NOT send
+      res.json({ draft, sent: false });
+    } catch (error) {
+      console.error("Error generating win-back:", error);
+      res.status(500).json({ error: "Failed to generate win-back draft" });
+    }
+  }
+);
+
+router.get(
+  "/loss-intelligence",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const stats = await storage.getLossStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching loss intelligence:", error);
+      res.status(500).json({ error: "Failed to fetch loss intelligence" });
+    }
+  }
+);
 
 export default router;
