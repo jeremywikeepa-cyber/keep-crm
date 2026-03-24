@@ -167,12 +167,21 @@ export interface GraphMessage {
 }
 
 export async function pollNewEmails(sinceHours = 1): Promise<GraphMessage[]> {
+  return pollNewEmailsFromFolder("inbox", sinceHours);
+}
+
+/**
+ * Poll emails from a specific mail folder.
+ * @param folder - 'inbox' | 'sentitems' | any well-known folder name
+ * @param sinceHours - how far back to look
+ */
+export async function pollNewEmailsFromFolder(folder: string, sinceHours = 1): Promise<GraphMessage[]> {
   const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000).toISOString();
   const filter = encodeURIComponent(`receivedDateTime ge ${since}`);
   const select = "id,conversationId,subject,bodyPreview,body,receivedDateTime,from,toRecipients";
 
   const data = await graphRequest(
-    `/me/mailFolders/inbox/messages?$filter=${filter}&$select=${select}&$top=50&$orderby=receivedDateTime+desc`,
+    `/me/mailFolders/${folder}/messages?$filter=${filter}&$select=${select}&$top=50&$orderby=receivedDateTime+desc`,
   );
   return (data.value || []) as GraphMessage[];
 }

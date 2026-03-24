@@ -5,6 +5,7 @@ import * as storage from "./storage.js";
 import type { InsertLead, InsertLeadActivity, InsertLeadNote, InsertUser } from "../shared/schema.js";
 import { generateL1Estimate } from "./l1-estimate.js";
 import { getOAuthUrl, exchangeCode, sendEmail, getEmailThread, hasTokens } from "./graph.js";
+import { syncEmails } from "./emailSync.js";
 
 const router = Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -870,6 +871,17 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
     }
   }
 );
+
+// ─── MANUAL EMAIL SYNC TRIGGER ───────────────────────────────────────────────
+router.post("/email-sync/trigger", requireAuth, async (req: Request, res: Response) => {
+  try {
+    await syncEmails();
+    res.json({ success: true, message: "Email sync completed" });
+  } catch (err: any) {
+    console.error("[routes] Manual sync error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get(
   "/loss-intelligence",

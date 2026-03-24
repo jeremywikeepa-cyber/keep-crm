@@ -1,28 +1,45 @@
 // Email sync: polls Outlook via Graph API, matches to leads, saves to communications
-import { pollNewEmails, hasTokens } from "./graph.js";
+import { pollNewEmailsFromFolder, hasTokens } from "./graph.js";
 import * as storage from "./storage.js";
 
-// ── Sync emails ───────────────────────────────────────────────────────────────
+// ─── Team email addresses (used to identify outbound direction) ───────────────
+const TEAM_EMAILS = new Set([
+  "jeremy@keepmodular.com.au",
+  "jeremy@keepconstructions.com.au",
+  "shem@keepmodular.com.au",
+  "anthony@keepmodular.com.au",
+  "clarissa@keepmodular.com.au",
+  "theo@keepmodular.com.au",
+]);
+
+// ─── Sync emails ──────────────────────────────────────────────────────────────
 
 export async function syncEmails(): Promise<void> {
   if (!hasTokens()) return;
 
   try {
-    // Poll last 1 hour (runs every 15 min — 1h gives overlap buffer)
-    const messages = await pollNewEmails(1);
-    if (!messages.length) return;
+    // Poll last 1 hour from both Inbox and Sent Items
+    const [inboxMessages, sentMessages] = await Promise.all([
+      pollNewEmailsFromFolder("inbox", 1),
+      pollNewEmailsFromFolder("sentitems", 1),
+    ]);
 
-    for (const msg of messages) {
-      // Skip if already stored (idempotent)
+    console.log(`[emailSync] Inbox: ${inboxMessages.length} msgs, Sent: ${sentMessages.length} msgs`);
+
+    // Process inbox messages as inbound
+    for (const msg of inboxMessages) {
       const existing = await storage.getCommunicationByMsId(msg.id);
       if (existing) continue;
 
-      // Try to match to a lead by email address
+      // Sender is the lead (someone emailed the team)
       const senderEmail = msg.from?.emailAddress?.address?.toLowerCase();
       if (!senderEmail) continue;
 
+      // Skip if sender is a team member (internal email)
+      if (TEAM_EMAILS.has(senderEmail)) continue;
+
       const lead = await storage.getLeadByEmail(senderEmail);
-      if (!lead) continue; // email not in our pipeline — skip
+      if (!lead) continue;
 
       await storage.createCommunication({
         leadId:      lead.id,
@@ -34,13 +51,48 @@ export async function syncEmails(): Promise<void> {
         msThreadId:  msg.conversationId,
         sentAt:      msg.receivedDateTime ? new Date(msg.receivedDateTime) : new Date(),
       });
+
+      console.log(`[emailSync] Inbound: ${senderEmail} → lead #${lead.id}`);
+    }
+
+    // Process sent items as outbound
+    for (const msg of sentMessages) {
+      const existing = await storage.getCommunicationByMsId(msg.id);
+      if (existing) continue;
+
+      // For sent items, match by recipient email (the lead we emailed)
+      const recipients = msg.toRecipients || [];
+      for (const recipient of recipients) {
+        const recipientEmail = recipient.emailAddress?.address?.toLowerCase();
+        if (!recipientEmail) continue;
+
+        // Skip if recipient is a team member (internal email)
+        if (TEAM_EMAILS.has(recipientEmail)) continue;
+
+        const lead = await storage.getLeadByEmail(recipientEmail);
+        if (!lead) continue;
+
+        await storage.createCommunication({
+          leadId:      lead.id,
+          direction:   "outbound",
+          subject:     msg.subject || "(no subject)",
+          bodyPreview: msg.bodyPreview || "",
+          fullBody:    msg.body?.content || "",
+          msMessageId: msg.id,
+          msThreadId:  msg.conversationId,
+          sentAt:      msg.receivedDateTime ? new Date(msg.receivedDateTime) : new Date(),
+        });
+
+        console.log(`[emailSync] Outbound: → ${recipientEmail} (lead #${lead.id})`);
+        break; // Only log once per sent message
+      }
     }
   } catch (err) {
     console.error("[emailSync] Poll error:", err);
   }
 }
 
-// ── Start polling interval ────────────────────────────────────────────────────
+// ─── Start polling interval ───────────────────────────────────────────────────
 
 export function startEmailPolling(): void {
   const INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
