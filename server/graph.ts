@@ -235,4 +235,86 @@ export async function getEmailThread(conversationId: string): Promise<GraphMessa
     `/me/messages?$filter=${filter}&$select=${select}&$orderby=receivedDateTime+asc`,
   );
   return (data.value || []) as GraphMessage[];
+
+// ── Client-credentials token (app-only, no signed-in user) ───────────────────
+// Used for server-side OneDrive file uploads without a user OAuth session.
+
+let _appToken       = "";
+let _appTokenExpiry = 0;
+
+async function getAppToken(): Promise<string> {
+  if (_appToken && Date.now() < _appTokenExpiry) return _appToken;
+
+  const body = new URLSearchParams({
+    client_id:     CLIENT_ID,
+    client_secret: CLIENT_SECRET,
+    grant_type:    "client_credentials",
+    scope:         "https://graph.microsoft.com/.default",
+  });
+
+  const url = `https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token`;
+  const res = await fetch(url, {
+    method:  "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body:    body.toString(),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`App token request failed: ${err}`);
+  }
+
+  const data = await res.json() as { access_token: string; expires_in: number };
+  _appToken       = data.access_token;
+  _appTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return _appToken;
+}
+
+// ── Upload file to OneDrive (Keep Modular > Resources > Trixie OS) ────────────
+//
+// Uses app-only (client credentials) auth — no user login required.
+//
+// @param fileName   - e.g. "quote-2026-001.pdf"
+// @param fileBuffer - file contents as Buffer or Uint8Array
+// @param mimeType   - e.g. "application/pdf" or "text/plain"
+// @param subFolder  - optional sub-folder inside Trixie OS, e.g. "Quotes"
+// @param userUpn    - UPN of the OneDrive owner, defaults to env var MS_ONEDRIVE_USER
+
+export async function uploadToOneDrive(
+  fileName:   string,
+  fileBuffer: Buffer | Uint8Array,
+  mimeType    = "application/octet-stream",
+  subFolder   = "",
+  userUpn     = process.env.MS_ONEDRIVE_USER || "",
+): Promise<{ webUrl: string; id: string }> {
+  if (!userUpn) throw new Error("MS_ONEDRIVE_USER env var not set");
+
+  const token = await getAppToken();
+
+  // Build the destination path: Keep Modular > Resources > Trixie OS > [subFolder]
+  const basePath = "Resources/Trixie OS";
+  const destPath = subFolder
+    ? `${basePath}/${subFolder}/${fileName}`
+    : `${basePath}/${fileName}`;
+
+  const uploadUrl = `${GRAPH_BASE}/users/${encodeURIComponent(userUpn)}/drive/root:/${encodeURIComponent(destPath)}:/content`;
+
+  const res = await fetch(uploadUrl, {
+    method:  "PUT",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type":  mimeType,
+    },
+    body: fileBuffer,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OneDrive upload failed (${res.status}): ${err}`);
+  }
+
+  const data = await res.json() as { webUrl: string; id: string };
+  console.log(`[OneDrive] Uploaded "${fileName}" to ${basePath}/${subFolder} -> ${data.webUrl}`);
+  return data;
+}
 }
